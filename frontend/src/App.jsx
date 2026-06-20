@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 
 // RÚBRICA: Personalización estricta de colores (Pastelería Premium)
 const COLORS = {
-  bg: '#FFFDF9',        // Fondo crema suave
+  bg: '#FFFDF9',         // Fondo crema suave
   primary: '#D4A373',   // Dorado otoñal para botones y realces
   accent: '#FAEDCD',    // Vainilla para tarjetas y estados interactivos
   text: '#4A3E3D',      // Marrón chocolate oscuro para los textos
@@ -26,7 +26,6 @@ export default function App() {
 
   // RÚBRICA: Sincronización estricta con la Base de Datos de Django 
   useEffect(() => {
-    // Solo cargamos del backend si estamos en el catálogo para no sobreescribir el estado del carrito en edición
     if (vista === "catalogo" && productos.length === 0) {
       fetch('http://127.0.0.1:8000/api/productos/')
         .then(res => {
@@ -44,7 +43,7 @@ export default function App() {
           setErrorBackend("No se pudo conectar al Backend de Django. Asegúrate de iniciar el servidor y registrar datos en el admin.");
         });
     }
-  }, [vista]);
+  }, [vista, productos.length]);
 
   // RÚBRICA: Gestión de Inventarios - Reducción reactiva de stock en catálogo
   const agregarAlCarrito = (producto) => {
@@ -52,10 +51,8 @@ export default function App() {
       return alert("¡Control de Inventario! Producto temporalmente agotado.");
     }
 
-    // 1. Descontar 1 unidad del stock visible del producto en el catálogo
     setProductos(productos.map(p => p.id === producto.id ? { ...p, stock: p.stock - 1 } : p));
 
-    // 2. Insertar o aumentar la cantidad en el carrito
     const itemEnCarrito = carrito.find(i => i.id === producto.id);
     if (itemEnCarrito) {
       setCarrito(carrito.map(i => i.id === producto.id ? { ...i, cantidad: i.cantidad + 1 } : i));
@@ -69,10 +66,7 @@ export default function App() {
     const itemAELiminar = carrito.find(i => i.id === idItem);
     if (!itemAELiminar) return;
 
-    // 1. Devolver las unidades retenidas al stock del catálogo
     setProductos(productos.map(p => p.id === idItem ? { ...p, stock: p.stock + itemAELiminar.cantidad } : p));
-
-    // 2. Filtrar el carrito para removerlo
     setCarrito(carrito.filter(i => i.id !== idItem));
   };
 
@@ -99,7 +93,7 @@ export default function App() {
 
       if (response.ok) {
         setCarrito([]);
-        setProductos([]); // Forzar recarga limpia desde la base de datos en la siguiente vuelta
+        setProductos([]); // Forzar recarga limpia desde la base de datos
         setVista("exito");
       } else {
         alert("La pasarela de pago Izipay rechazó la transacción.");
@@ -203,7 +197,7 @@ export default function App() {
           <h2 style={{ borderBottom: `2px solid ${COLORS.primary}`, paddingBottom: '5px', marginBottom: '20px' }}>🛒 Tu Bolsa de Compras</h2>
           
           {carrito.length === 0 ? (
-            <div style={{ textAlign: 'center', padding: '5px', backgroundColor: COLORS.white, borderRadius: '12px', border: `1px solid ${COLORS.accent}` }}>
+            <div style={{ textAlign: 'center', padding: '40px', backgroundColor: COLORS.white, borderRadius: '12px', border: `1px solid ${COLORS.accent}` }}>
               <p style={{ fontSize: '18px', color: '#777' }}>Tu carrito está actualmente vacío.</p>
               <button onClick={() => setVista("catalogo")} style={{ padding: '10px 20px', backgroundColor: COLORS.primary, color: COLORS.white, border: 'none', borderRadius: '6px', cursor: 'pointer', fontWeight: 'bold' }}>
                 Ir a mirar pasteles
@@ -213,7 +207,6 @@ export default function App() {
             <div style={{ backgroundColor: COLORS.white, padding: '25px', borderRadius: '12px', border: `1px solid ${COLORS.accent}`, boxShadow: '0 4px 10px rgba(0,0,0,0.02)' }}>
               <p style={{ fontSize: '14px', color: '#666', marginTop: 0, marginBottom: '20px' }}>Monitorea los detalles de tu orden o remueve porciones antes de pasar a la caja de cobro.</p>
               
-              {/* Tabla / Lista de productos en monitoreo */}
               {carrito.map(item => (
                 <div key={item.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '15px 0', borderBottom: '1px dashed #DDD' }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
@@ -225,10 +218,9 @@ export default function App() {
                   </div>
                   
                   <div style={{ display: 'flex', alignItems: 'center', gap: '25px' }}>
-                    <span style={{ fontSize: '16px', fontWeight: 'bold' }}>Cantidad: {item.amount} <span style={{ color: COLORS.primary }}>x{item.cantidad}</span></span>
+                    <span style={{ fontSize: '16px', fontWeight: 'bold' }}>Cantidad: <span style={{ color: COLORS.primary }}>x{item.cantidad}</span></span>
                     <span style={{ fontSize: '16px', fontWeight: 'bold', minWidth: '80px', textAlign: 'right' }}>S/ {(item.price * item.cantidad).toFixed(2)}</span>
                     
-                    {/* Botón Eliminar: Devuelve stock */}
                     <button 
                       onClick={() => eliminarDelCarrito(item.id)} 
                       style={{ padding: '6px 12px', backgroundColor: '#FAD2E1', color: COLORS.danger, border: 'none', borderRadius: '6px', cursor: 'pointer', fontWeight: 'bold', fontSize: '13px' }}
@@ -240,8 +232,7 @@ export default function App() {
                 </div>
               ))}
 
-              {/* Panel de Pagar / Continuar */}
-              <div style={{ display: 'flex', justifyContent: 'space-between', fontWeight: 'bold', fontSize: '22px', marginTop: '30px', paddingBefore: '10px', borderTop: `2px solid ${COLORS.accent}`, paddingTop: '15px' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontWeight: 'bold', fontSize: '22px', marginTop: '30px', borderTop: `2px solid ${COLORS.accent}`, paddingTop: '15px' }}>
                 <span>Total de la Orden:</span>
                 <span style={{ color: COLORS.primary }}>S/ {calcularTotal().toFixed(2)}</span>
               </div>
@@ -278,7 +269,7 @@ export default function App() {
               <span style={{ fontSize: '11px', color: COLORS.primary, fontWeight: 'bold', display: 'block', marginBottom: '10px' }}>🔒 PASARELA INTEGRADA: EMBEDDED POPUP IZIPAY API</span>
               <div style={{ display: 'flex', justifyContent: 'center', gap: '10px' }}>
                 <span style={{ fontSize: '20px' }}>💳</span>
-                <input type="text" disabled placeholder="Número de Tarjeta de Débito / Crédito" style={{ width: '75%', padding: '5px', textAlign: 'center', borderRadius: '4px', border: '1px solid #DDD' }} />
+                <input type="text" placeholder="Escribe el número de tarjeta Sandbox" required style={{ width: '75%', padding: '5px', textAlign: 'center', borderRadius: '4px', border: '1px solid #DDD' }} />
               </div>
             </div>
 
