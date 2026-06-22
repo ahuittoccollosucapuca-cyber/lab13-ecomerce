@@ -10,8 +10,8 @@ class CategoriaAdmin(admin.ModelAdmin):
 
 @admin.register(Producto)
 class ProductoAdmin(admin.ModelAdmin):
-    # RÚBRICA: Columnas clave integrando marketing (precio_promocional, es_marketing) e inventario (stock_estado)
-    list_display = ('mostrar_imagen', 'nombre', 'categoria', 'precio_formateado', 'precio_promo_formateado', 'stock_estado', 'es_marketing', 'es_activo')
+    # CORRECCIÓN: Se agrega 'stock' al final de la tupla para que funcione list_editable sin romper 'stock_estado'
+    list_display = ('mostrar_imagen', 'nombre', 'categoria', 'precio_formateado', 'precio_promo_formateado', 'stock_estado', 'es_marketing', 'es_activo', 'stock')
     
     # Filtros laterales para una rápida gestión de inventario y campañas
     list_filter = ('categoria', 'es_activo', 'es_marketing')
@@ -36,11 +36,12 @@ class ProductoAdmin(admin.ModelAdmin):
     def stock_estado(self, obj):
         """Muestra el stock con una alerta visual si se está agotando"""
         if obj.stock == 0:
-            return format_html('<span style="color: red; font-weight: bold;"> AGOTADO (0)</span>')
+            # CORRECCIÓN: Pasamos obj.stock como argumento dinámico para evitar el TypeError de format_html
+            return format_html('<span style="color: red; font-weight: bold;"> AGOTADO ({})</span>', obj.stock)
         elif obj.stock <= 5:
             return format_html('<span style="color: orange; font-weight: bold;"> CRÍTICO ({})</span>', obj.stock)
         return format_html('<span style="color: green;">✔ {} uds</span>', obj.stock)
-    stock_estado.short_description = 'Inventario / Stock'
+    stock_estado.short_description = 'Inventario / Alerta'
 
     def mostrar_imagen(self, obj):
         """Renderiza una miniatura de la imagen en el propio menú de administración"""
@@ -70,11 +71,12 @@ class OrdenAdmin(admin.ModelAdmin):
     total_formateado.short_description = 'Total Pagado'
 
     def estado_pago(self, obj):
+        # CORRECCIÓN DEFINITIVA: Usamos el marcador {} en todos los casos y pasamos el texto como parámetro dinámico
         if obj.estado == 'PAGADO':
-            return format_html('<b style="color: green;">💳 PAGADO (Izipay)</b>')
+            return format_html('<b style="color: green;">💳 {} (Izipay)</b>', 'PAGADO')
         elif obj.estado == 'RECHAZADO':
-            return format_html('<b style="color: red;"> RECHAZADO</b>')
-        return format_html('<b style="color: orange;"> PENDIENTE</b>')
+            return format_html('<b style="color: red;"> ❌ {}</b>', obj.estado)
+        return format_html('<b style="color: orange;"> ⏳ {}</b>', obj.estado)
     estado_pago.short_description = 'Estado'
 
 
@@ -82,9 +84,12 @@ class OrdenAdmin(admin.ModelAdmin):
 
 @admin.register(CuponDescuento)
 class CuponDescuentoAdmin(admin.ModelAdmin):
-    list_display = ('codigo', 'porcentaje_formateado', 'estado_cupon')
+    # Añadimos 'activo' al final de la tupla para solucionar el error
+    list_display = ('codigo', 'porcentaje_formateado', 'estado_cupon', 'activo')
     list_filter = ('activo',)
     search_fields = ('codigo',)
+    
+    # Ahora sí coincide perfectamente con list_display
     list_editable = ('activo',)
 
     def porcentaje_formateado(self, obj):
@@ -92,10 +97,11 @@ class CuponDescuentoAdmin(admin.ModelAdmin):
     porcentaje_formateado.short_description = 'Descuento'
 
     def estado_cupon(self, obj):
+        # CORRECCIÓN: Usamos el marcador {} y pasamos el texto como parámetro para blindar contra el TypeError
         if obj.activo:
-            return format_html('<span style="color: green; font-weight: bold;">Activo</span>')
-        return format_html('<span style="color: red;">Inactivo</span>')
-    estado_cupon.short_description = 'Estado'
+            return format_html('<span style="color: green; font-weight: bold;">{}</span>', 'Activo')
+        return format_html('<span style="color: red;">{}</span>', 'Inactivo')
+    estado_cupon.short_description = 'Visualización'
 
 
 @admin.register(Comentario)
