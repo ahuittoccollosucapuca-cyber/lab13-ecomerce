@@ -16,12 +16,17 @@ class Producto(models.Model):
     categoria = models.ForeignKey(Categoria, on_delete=models.CASCADE, related_name='productos')
     nombre = models.CharField(max_length=150)
     descripcion = models.TextField()
-    precio = models.DecimalField(max_digits=10, decimal_places=2)  # Tu campo regular original
-    precio_promocional = models.DecimalField(max_digits=10, decimal_places=2, blank=True, null=True)  # Nuevo: Requisito de marketing
+    
+    # Campo obligatorio principal
+    precio = models.DecimalField(max_digits=10, decimal_places=2)  
+    
+    # Campo opcional para promociones y marketing estratégico
+    precio_promocional = models.DecimalField(max_digits=10, decimal_places=2, blank=True, null=True)  
+    
     stock = models.IntegerField(default=0)
     imagen_url = models.URLField(max_length=500, blank=True, null=True)
     es_activo = models.BooleanField(default=True)
-    es_marketing = models.BooleanField(default=False)  # Nuevo: Destacar en carrusel/promociones
+    es_marketing = models.BooleanField(default=False)  
 
     def __str__(self):
         return self.nombre
@@ -32,6 +37,7 @@ class Producto(models.Model):
 
     # Nuevo método para obtener el precio real considerando si está en oferta
     def obtener_precio_final(self):
+        # Si tiene el flag de marketing activado Y se configuró un precio de oferta válido, se aplica.
         if self.es_marketing and self.precio_promocional:
             return self.precio_promocional
         return self.precio
@@ -84,4 +90,5 @@ class Comentario(models.Model):  # Nuevo: Módulo analítico/recomendaciones del
     fecha = models.DateTimeField(auto_now_add=True)
 
     def __str__(self):
+        # CORRECCIÓN: Se remueve la coma final que causaba el retorno de una tupla inesperada
         return f"Comentario de {self.usuario.username} en {self.producto.nombre}"

@@ -16,12 +16,19 @@ Including another URLconf
 """
 from django.contrib import admin
 from django.urls import path
-from shop.views import listar_productos, izipay_webhook
+# Importamos las dos nuevas funciones que creamos en views.py
+from shop.views import listar_productos, izipay_webhook, validar_cupon, listar_comentarios
 
 urlpatterns = [
     path('admin/', admin.site.urls),
     path('api/productos/', listar_productos),
-    path('api/payments/izipay-webhook/', izipay_webhook),
+    
+    # Ajustamos esta ruta para que calce con el fetch de tu App.jsx (api/izipay/webhook/)
+    path('api/izipay/webhook/', izipay_webhook),
+    
+    # NUEVAS RUTAS CONECTADAS DIRECTAMENTE AL CORE:
+    path('api/cupones/validar/', validar_cupon),
+    path('api/comentarios/', listar_comentarios),
 ]
 
 admin.site.site_header = " Panel de Control - Sweet & Grace"

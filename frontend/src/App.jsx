@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import SeccionComentarios from './components/SeccionComentarios'; // Archivo nuevo
 
 // RÚBRICA: Personalización estricta de colores (Pastelería Premium)
 const COLORS = {
@@ -23,6 +24,14 @@ export default function App() {
   // Gestión de orden e inventario
   const [direccion, setDireccion] = useState("");
   const [fechaEntrega, setFechaEntrega] = useState("");
+
+  // NUEVOS ESTADOS: Control del Módulo de Cupones
+  const [cuponTexto, setCuponTexto] = useState('');
+  const [descuentoPorcentaje, setDescuentoPorcentaje] = useState(0);
+  const [mensajeCupon, setMensajeCupon] = useState({ texto: '', error: false });
+
+  // NUEVOS ESTADOS: Control de Comentarios por Producto Seleccionado
+  const [productoSeleccionado, setProductoSeleccionado] = useState(null);
 
   // RÚBRICA: Sincronización estricta con la Base de Datos de Django 
   useEffect(() => {
@@ -70,8 +79,46 @@ export default function App() {
     setCarrito(carrito.filter(i => i.id !== idItem));
   };
 
-  const calcularTotal = () => carrito.reduce((sum, item) => sum + (item.price * item.cantidad), 0);
+  const calcularTotalBase = () => carrito.reduce((sum, item) => sum + (item.price * item.cantidad), 0);
+  
+  // Operación matemática final del flujo de caja (Aplicando Descuento de Rúbrica)
+  const montoDescuento = (calcularTotalBase() * descuentoPorcentaje) / 100;
+  const totalFinalConDescuento = calcularTotalBase() - montoDescuento;
+
   const totalItems = () => carrito.reduce((a, b) => a + b.cantidad, 0);
+
+  // RÚBRICA: Validación Comercial de Cupones en el Carrito
+  const procesarCupon = async () => {
+    if (!cuponTexto.trim()) return;
+
+    // CORRECCIÓN AQUÍ: Cambiamos .upper() por .toUpperCase() de JavaScript
+    const codigo_a_enviar = cuponTexto.trim().toUpperCase();
+
+    try {
+      // 1. Verificamos la URL exacta con slash final
+      const response = await fetch('http://127.0.0.1:8000/api/cupones/validar/', {
+        method: 'POST',
+        headers: { 
+          'Content-Type': 'application/json' 
+        },
+        // 2. Enviamos el JSON limpio a Django
+        body: JSON.stringify({ codigo: codigo_a_enviar })
+      });
+      
+      const data = await response.json();
+
+      if (response.ok && data.valido) {
+        setDescuentoPorcentaje(data.porcentaje);
+        setMensajeCupon({ texto: `¡Cupón aplicado! Descuento del ${data.porcentaje}% sobre el total.`, error: false });
+      } else {
+        setDescuentoPorcentaje(0);
+        setMensajeCupon({ texto: data.message || 'Cupón inválido.', error: true });
+      }
+    } catch (err) {
+      setDescuentoPorcentaje(0);
+      setMensajeCupon({ texto: 'Error crítico al conectar con el servidor central.', error: true });
+    }
+  };
 
   // RÚBRICA: Procesamiento con la API de Cobros (Webhook de Izipay)
   const procesarPagoIzipay = async (e) => {
@@ -80,7 +127,7 @@ export default function App() {
     
     setLoadingPago(true);
     try {
-      const response = await fetch('http://127.0.0.1:8000/api/payments/izipay-webhook/', {
+      const response = await fetch('http://127.0.0.1:8000/api/izipay/webhook/', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -93,6 +140,9 @@ export default function App() {
 
       if (response.ok) {
         setCarrito([]);
+        setDescuentoPorcentaje(0); // Limpiar cupón para la siguiente compra
+        setCuponTexto('');
+        setMensajeCupon({ texto: '', error: false });
         setProductos([]); // Forzar recarga limpia desde la base de datos
         setVista("exito");
       } else {
@@ -105,12 +155,22 @@ export default function App() {
     }
   };
 
+  // Función interna para determinar alertas dinámicas de stock idénticas al backend
+  const renderBadgeInventario = (stock) => {
+    if (stock === 0) {
+      return <span style={{ color: COLORS.danger, fontWeight: 'bold', backgroundColor: '#FFEBEB', padding: '2px 6px', borderRadius: '4px', fontSize: '12px' }}>AGOTADO (0)</span>;
+    } else if (stock <= 5) {
+      return <span style={{ color: 'orange', fontWeight: 'bold', backgroundColor: '#FFF3E0', padding: '2px 6px', borderRadius: '4px', fontSize: '12px' }}>CRÍTICO ({stock})</span>;
+    }
+    return <span style={{ color: COLORS.success, fontSize: '12px', fontWeight: 'bold' }}>✔ {stock} uds</span>;
+  };
+
   return (
     <div style={{ fontFamily: 'Georgia, serif', backgroundColor: COLORS.bg, minHeight: '100vh', color: COLORS.text }}>
       
       {/* RÚBRICA: Logo Gráfico e Identidad de Marca */}
       <header style={{ backgroundColor: COLORS.white, padding: '20px 25px', borderBottom: `3px solid ${COLORS.accent}`, display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '12px', cursor: 'pointer' }} onClick={() => setVista("catalogo")}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '12px', cursor: 'pointer' }} onClick={() => { setVista("catalogo"); setProductoSeleccionado(null); }}>
           <div style={{ width: '45px', height: '45px', borderRadius: '50%', backgroundColor: COLORS.primary, display: 'flex', justifyContent: 'center', alignItems: 'center', color: COLORS.white, fontSize: '22px', fontWeight: 'bold', boxShadow: '0 2px 4px rgba(0,0,0,0.1)' }}>
             S&G
           </div>
@@ -122,8 +182,8 @@ export default function App() {
 
         {/* MENÚ DE PESTAÑAS (Navegación Superior) */}
         <nav style={{ display: 'flex', gap: '15px', marginTop: '10px' }}>
-          <button onClick={() => setVista("catalogo")} style={{ padding: '10px 20px', border: 'none', background: vista === 'catalogo' ? COLORS.accent : 'none', color: COLORS.text, cursor: 'pointer', borderRadius: '8px', fontWeight: 'bold' }}>
-            🏪 Catálogo
+          <button onClick={() => { setVista("catalogo"); setProductoSeleccionado(null); }} style={{ padding: '10px 20px', border: 'none', background: vista === 'catalogo' ? COLORS.accent : 'none', color: COLORS.text, cursor: 'pointer', borderRadius: '8px', fontWeight: 'bold' }}>
+            Establishment 🏪 Catálogo
           </button>
           <button onClick={() => setVista("carrito")} style={{ padding: '10px 20px', border: 'none', background: vista === 'carrito' ? COLORS.accent : COLORS.primary, color: vista === 'carrito' ? COLORS.text : COLORS.white, cursor: 'pointer', borderRadius: '8px', fontWeight: 'bold', boxShadow: '0 2px 4px rgba(0,0,0,0.1)' }}>
             🛒 Mi Carrito ({totalItems()})
@@ -157,37 +217,65 @@ export default function App() {
           </div>
 
           {/* Grid de Productos */}
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: '25px' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '25px' }}>
             {productos
               .filter(p => categoriaSeleccionada === "Todas" || p.category === categoriaSeleccionada)
               .map(prod => (
-                <div key={prod.id} style={{ backgroundColor: COLORS.white, padding: '20px', borderRadius: '12px', border: `1px solid ${COLORS.accent}`, display: 'flex', flexDirection: 'column', justifyContent: 'space-between', boxShadow: '0 4px 6px rgba(0,0,0,0.01)' }}>
+                <div key={prod.id} style={{ backgroundColor: COLORS.white, padding: '20px', borderRadius: '12px', border: `1px solid ${COLORS.accent}`, display: 'flex', flexDirection: 'column', justifyContent: 'space-between', position: 'relative', boxShadow: '0 4px 6px rgba(0,0,0,0.01)' }}>
+                  
+                  {/* RÚBRICA: Campaña de Marketing directo desde el Admin */}
+                  {prod.es_marketing && (
+                    <div style={{ position: 'absolute', top: '15px', right: '15px', backgroundColor: '#E91E63', color: COLORS.white, padding: '3px 8px', borderRadius: '4px', fontSize: '10px', fontWeight: 'bold', zIndex: 2 }}>
+                      🔥 CAMPAÑA
+                    </div>
+                  )}
+
                   <div>
                     {prod.imagen_url && (
-                      <img src={prod.imagen_url} alt={prod.name} style={{ width: '100%', height: '160px', objectFit: 'cover', borderRadius: '8px', marginBottom: '12px' }} />
+                      <img src={prod.imagen_url} alt={prod.name} style={{ width: '100%', height: '160px', objectFit: 'cover', borderRadius: '8px', marginBottom: '12px', cursor: 'pointer' }} onClick={() => setProductoSeleccionado(prod)} />
                     )}
                     <span style={{ fontSize: '11px', color: COLORS.primary, fontWeight: 'bold', textTransform: 'uppercase' }}>{prod.category}</span>
-                    <h3 style={{ margin: '5px 0 10px 0', fontSize: '18px' }}>{prod.name}</h3>
+                    <h3 style={{ margin: '5px 0 10px 0', fontSize: '18px', cursor: 'pointer' }} onClick={() => setProductoSeleccionado(prod)}>{prod.name}</h3>
                     <p style={{ fontSize: '13px', color: '#666', margin: '0 0 15px 0', lineHeight: '1.4' }}>{prod.description}</p>
                   </div>
                   <div>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
                       <span style={{ color: COLORS.text, fontWeight: 'bold', fontSize: '20px' }}>S/ {prod.price.toFixed(2)}</span>
-                      <span style={{ fontSize: '12px', color: prod.stock > 0 ? '#2A9D8F' : COLORS.danger, fontWeight: 'bold' }}>
-                        {prod.stock > 0 ? `${prod.stock} disponibles` : "Agotado en Tienda"}
-                      </span>
+                      
+                      {/* RÚBRICA: Alertas dinámicas de control de inventario */}
+                      {renderBadgeInventario(prod.stock)}
                     </div>
-                    <button 
-                      onClick={() => agregarAlCarrito(prod)} 
-                      disabled={prod.stock <= 0}
-                      style={{ width: '100%', padding: '10px', backgroundColor: prod.stock > 0 ? COLORS.primary : '#E0E0E0', color: COLORS.white, border: 'none', borderRadius: '6px', cursor: prod.stock > 0 ? 'pointer' : 'not-allowed', fontWeight: 'bold' }}
-                    >
-                      {prod.stock > 0 ? "➕ Añadir al Pedido" : "🔒 Sin Stock Disponible"}
-                    </button>
+
+                    <div style={{ display: 'flex', gap: '10px' }}>
+                      <button 
+                        onClick={() => agregarAlCarrito(prod)} 
+                        disabled={prod.stock <= 0}
+                        style={{ flex: 2, padding: '10px', backgroundColor: prod.stock > 0 ? COLORS.primary : '#E0E0E0', color: COLORS.white, border: 'none', borderRadius: '6px', cursor: prod.stock > 0 ? 'pointer' : 'not-allowed', fontWeight: 'bold' }}
+                      >
+                        {prod.stock > 0 ? "➕ Añadir" : "🔒 Agotado"}
+                      </button>
+                      <button 
+                        onClick={() => setProductoSeleccionado(prod)}
+                        style={{ flex: 1, padding: '10px', backgroundColor: COLORS.accent, color: COLORS.text, border: 'none', borderRadius: '6px', cursor: 'pointer', fontWeight: 'bold', fontSize: '12px' }}
+                      >
+                        💬 Ver
+                      </button>
+                    </div>
                   </div>
                 </div>
               ))}
           </div>
+
+          {/* RÚBRICA: Renderizado Analítico de Comentarios del Producto Seleccionado */}
+          {productoSeleccionado && (
+            <div style={{ marginTop: '40px', padding: '25px', backgroundColor: COLORS.white, borderRadius: '12px', border: `1px solid ${COLORS.primary}` }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <h3 style={{ margin: 0 }}>Comentarios y Valoraciones para: <span style={{ color: COLORS.primary }}>{productoSeleccionado.name}</span></h3>
+                <button onClick={() => setProductoSeleccionado(null)} style={{ background: COLORS.danger, color: COLORS.white, border: 'none', borderRadius: '4px', padding: '5px 10px', cursor: 'pointer', fontWeight: 'bold' }}>Cerrar Auditoría</button>
+              </div>
+              <SeccionComentarios productoId={productoSeleccionado.id} />
+            </div>
+          )}
         </div>
       )}
 
@@ -205,7 +293,6 @@ export default function App() {
             </div>
           ) : (
             <div style={{ backgroundColor: COLORS.white, padding: '25px', borderRadius: '12px', border: `1px solid ${COLORS.accent}`, boxShadow: '0 4px 10px rgba(0,0,0,0.02)' }}>
-              <p style={{ fontSize: '14px', color: '#666', marginTop: 0, marginBottom: '20px' }}>Monitorea los detalles de tu orden o remueve porciones antes de pasar a la caja de cobro.</p>
               
               {carrito.map(item => (
                 <div key={item.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '15px 0', borderBottom: '1px dashed #DDD' }}>
@@ -224,7 +311,6 @@ export default function App() {
                     <button 
                       onClick={() => eliminarDelCarrito(item.id)} 
                       style={{ padding: '6px 12px', backgroundColor: '#FAD2E1', color: COLORS.danger, border: 'none', borderRadius: '6px', cursor: 'pointer', fontWeight: 'bold', fontSize: '13px' }}
-                      title="Eliminar del pedido y restablecer stock"
                     >
                       🗑️ Quitar
                     </button>
@@ -232,9 +318,37 @@ export default function App() {
                 </div>
               ))}
 
-              <div style={{ display: 'flex', justifyContent: 'space-between', fontWeight: 'bold', fontSize: '22px', marginTop: '30px', borderTop: `2px solid ${COLORS.accent}`, paddingTop: '15px' }}>
-                <span>Total de la Orden:</span>
-                <span style={{ color: COLORS.primary }}>S/ {calcularTotal().toFixed(2)}</span>
+              {/* RÚBRICA: Sección del Módulo Comercial de Cupones de Fidelización */}
+              <div style={{ marginTop: '25px', padding: '15px', backgroundColor: COLORS.bg, borderRadius: '8px', border: `1px dashed ${COLORS.primary}` }}>
+                <label style={{ display: 'block', marginBottom: '8px', fontWeight: 'bold', fontSize: '14px' }}>¿Tienes un cupón de descuento?</label>
+                <div style={{ display: 'flex', gap: '10px' }}>
+                  <input 
+                    type="text" 
+                    value={cuponTexto} 
+                    onChange={(e) => setCuponTexto(e.target.value)} 
+                    placeholder="Ej: TECSUP10" 
+                    style={{ padding: '8px', border: '1px solid #CCC', borderRadius: '6px', width: '200px', textTransform: 'uppercase' }} 
+                  />
+                  <button onClick={procesarCupon} style={{ padding: '8px 16px', backgroundColor: COLORS.text, color: COLORS.white, border: 'none', borderRadius: '6px', cursor: 'pointer', fontWeight: 'bold' }}>
+                    Validar Cupón
+                  </button>
+                </div>
+                {mensajeCupon.texto && (
+                  <p style={{ color: mensajeCupon.error ? COLORS.danger : COLORS.success, margin: '8px 0 0 0', fontWeight: 'bold', fontSize: '13px' }}>
+                    {mensajeCupon.texto}
+                  </p>
+                )}
+              </div>
+
+              {/* Desglose Matemático de la Caja */}
+              <div style={{ marginTop: '30px', borderTop: `2px solid ${COLORS.accent}`, paddingTop: '15px', textAlign: 'right' }}>
+                <p style={{ margin: '5px 0', color: '#666' }}>Subtotal: S/ {calcularTotalBase().toFixed(2)}</p>
+                {descuentoPorcentaje > 0 && (
+                  <p style={{ margin: '5px 0', color: COLORS.success, fontWeight: 'bold' }}>Descuento ({descuentoPorcentaje}%): - S/ {montoDescuento.toFixed(2)}</p>
+                )}
+                <h3 style={{ fontSize: '24px', margin: '10px 0 0 0', color: COLORS.primary }}>
+                  Total a pagar: S/ {totalFinalConDescuento.toFixed(2)}
+                </h3>
               </div>
 
               <div style={{ display: 'flex', gap: '15px', marginTop: '30px' }}>
@@ -274,7 +388,7 @@ export default function App() {
             </div>
 
             <button type="submit" disabled={loadingPago} style={{ width: '100%', padding: '15px', backgroundColor: COLORS.primary, color: COLORS.white, border: 'none', borderRadius: '6px', cursor: 'pointer', fontWeight: 'bold', fontSize: '16px' }}>
-              {loadingPago ? "Conectando con el Banco..." : `Confirmar Pago en Línea (S/ ${calcularTotal().toFixed(2)})`}
+              {loadingPago ? "Conectando con el Banco..." : `Confirmar Pago en Línea (S/ ${totalFinalConDescuento.toFixed(2)})`}
             </button>
           </form>
         </div>
